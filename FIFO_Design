@@ -1,0 +1,44 @@
+module fifo_design (
+	input clk,
+    input rd,wr,
+	input rst,
+  input [7:0]data_in,
+	output full,empty,
+  output reg [7:0] data_out,
+);
+  
+  //defining FIFO
+  reg [7:0] memr[31:0];
+  reg [4:0] wr_ptr;
+  reg [4:0] rd_ptr;
+  
+  always @ (posedge clk)
+    begin
+      //checking reset is active high or not!!!!!
+      if (rst==1'b1)
+        begin
+          rd_ptr<=0;
+          wr_ptr<=0;
+          data_out<=0;
+          for (int i=0;i<31;i++) begin
+            memr[i]<=0;
+          end
+        end
+      else 
+        begin
+          if ((empty==1'b0) && (wr==1'b1))
+            begin
+              memr[wr_ptr]<=data_in;
+              wr_ptr <= wr_ptr+1;
+            end
+          if ((full==1'b0) && (rd==1'b1))
+            begin
+              data_out<=memr[rd_ptr];
+              rd_ptr <=rd_ptr+1;
+            end
+        end
+    end
+  
+  assign empty = ((wr_ptr-rd_ptr)==0) ? 1'b1 : 1'b0;
+  assign full  = ((wr_ptr-rd_ptr)==31) ? 1'b1 : 1'b0;
+endmodule
