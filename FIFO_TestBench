@@ -1,0 +1,237 @@
+interface fifo_d ;
+  logic clk,rd,wr;
+  logic rst;
+  logic [7:0] data_in;
+  logic [7:0] data_out;
+  logic full,empty;
+endinterface
+/////////////////////////////////////////////////
+class transaction;
+  //declaring all input & output
+  rand bit rd,wr;
+  rand bit full,empty;
+  rand bit [7:0] data_in;
+  rand bit [7:0] data_out;
+  //make sure no global signals
+  
+  constraint wr_rd {
+    rd!=wr;
+    wr dist {0:/50 , 1:/50};
+    rd dist {0:/50 , 1:/50};
+  }
+  
+  constraint data_con {
+    data_in >1 ; data_in<5;
+  }
+  
+  //Purpose of making this function is different class need to display the 
+  //values they are generating.
+  function void display(input string tag);
+    $display("[%0s] : WR:%0b\t : RD:%0b\t : FULL:%0b\t : EMPTY:%0b : DATAWR : %0d\t: DATARD : %0d\t",tag,wr,rd,full,empty,data_in,data_out,$time);
+  endfunction
+  
+  //Getting dip copy
+  function transaction copy();
+    copy=new();
+    copy.rd=this.rd;
+    copy.wr=this.wr;
+    copy.data_in=this.data_in;
+    copy.data_out=this.data_out;
+    copy.full=this.full;
+    copy.empty=this.empty;
+  endfunction
+  
+endclass
+/////////////////////////////////////////////////
+class generation;
+  //transaction tr;
+  transaction tra;
+  mailbox #(transaction) mbx;
+  int count=0;
+  event next;
+  event done;
+  
+  function new(mailbox #(transaction)mbx);
+    this.mbx=mbx;
+    tra=new();
+  endfunction
+  
+  task run();
+    repeat(count)
+      begin
+        //assert(tr.randomize) else $error("randomization failed");
+        tra.randomize();
+        mbx.put(tra.copy);
+        tra.display("Sending Numbers");
+        ->done;
+      end
+  endtask
+endclass
+//////////////////////////////////////////////
+interface f_design;
+  logic wr;
+  logic rd;
+  logic clk;
+  logic rst;
+  logic full,empty;
+  logic [7:0] data_in;
+  logic [7:0] data_out;
+endinterface
+////////////////////////////////////////////////////////////
+class driver;
+  transaction trans;
+  virtual f_design fd;
+  event next;
+  mailbox #(transaction) mbx;
+  
+  function new (mailbox #(transaction) mbx);
+    this.mbx=mbx;
+  endfunction
+  
+  //Tak to reset the values//////////////
+  task reset();
+    fd.rst <= 1'b1;
+    fd.rd  <= 1'b0;
+    fd.wr  <= 1'b0;
+    fd.data_in <= 1'b0;
+    repeat(5) @(posedge fd.clk)begin
+      fd.rst <= 1'b0;
+    end
+  endtask
+  
+  //this task will give the values to DUT directly///
+  task run();
+    forever begin
+      mbx.get(trans);
+      trans.display("Received Numbers");
+      fd.rd <= trans.rd;
+      fd.wr <= trans.wr;
+      fd.data_in <= trans.data_in;
+      repeat (2)@(posedge fd.clk);
+      ->next;
+    end
+  endtask
+endclass
+////////////////////MONITOR////////////////////
+class monitor;
+  transaction tr;
+  virtual f_design fd;
+  mailbox #(transaction) mbx;
+  
+  function new(mailbox#(transaction)mbx);
+    this.mbx=mbx;
+  endfunction
+  
+  task run();
+    tr=new();
+    
+    forever begin
+      repeat(3) @(posedge fd.clk);
+      tr.wr = fd.wr;
+      tr.rd = fd.rd;
+      tr.data_in = fd.data_in;
+      tr.data_out = fd.data_out;
+      tr.full = fd.full;
+      tr.empty = fd.empty;
+      mbx.put(tr);
+      tr.display("Monitor values");
+    end
+  endtask
+endclass
+///////////////////////////////////////////////////////////
+class scoreboard;
+  transaction tr;
+  mailbox #(transaction) mbx;
+  event next;
+  
+  function new(mailbox#(transaction)mbx);
+    this.mbx=mbx;
+  endfunction
+  
+  ///making QUEUE/////////////////
+  bit [7:0] din[$];
+  bit [7:0] temp;
+  //[$]helps to define queue/////
+  task run();
+    tr=new();
+    forever begin
+      mbx.get(tr);
+      tr.display("Scoreboard valuess");
+      
+      if(tr.wr == 1'b1)
+        begin
+          din.push_front(tr.data_in);
+          $display("value is :%0d",tr.data_in);
+        end
+      
+      if(tr.rd==1'b1)
+        begin
+          if(tr.empty == 1'b0)
+           begin
+             din.pop_back();
+             if (tr.data_out == temp)
+               $display("matched");
+             else
+               $display("not matched");
+           end
+          else
+            $dislpay("nothing to read bitchhhhhh");
+        end
+    ->next;
+    end
+  endtask
+endclass
+    		      
+////////////////////////////////////////////////////////////
+module test_bench;
+  transaction tr;
+  generation gr;
+  driver dr;
+  monitor mn;
+  scoreboard scr;
+  mailbox #(transaction) mbx;
+  f_design fd();
+  event next;
+    
+  always #10 fd.clk <= ~fd.clk;
+  
+  fifo_design dut (fd.clk,fd.rst,fd.rd,fd.wr,fd.full,fd.empty,fd.data_in,fd.data_out);
+  
+    
+  initial begin
+    fd.clk <= 0;
+  end
+  
+  initial begin
+    mbx=new();
+    gr=new(mbx);
+    gr.count=3;
+    dr=new(mbx);
+    dr.fd=fd;
+    gr.next=next;
+    dr.next=next;
+    mn=new(mbx);
+    mn.fd=fd;
+    scr=new(mbx);
+  end
+  
+  initial begin
+    fork
+      gr.run();
+      dr.run();
+      mn.run();
+      scr.run();
+    join
+  end
+  
+  initial begin
+    #200;
+    $finish();
+  end
+  
+  initial begin
+    $dumpfile("dump.vcd");
+    $dumpvars;
+  end
+  
+endmodule
