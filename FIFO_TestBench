@@ -9,9 +9,9 @@ endinterface
 class transaction;
   //declaring all input & output
   rand bit rd,wr;
-  rand bit full,empty;
+  bit full,empty;
   rand bit [7:0] data_in;
-  rand bit [7:0] data_out;
+  bit [7:0] data_out;
   //make sure no global signals
   
   constraint wr_rd {
