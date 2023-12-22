@@ -1,10 +1,10 @@
 module fifo_design (
 	input clk,
-    input rd,wr,
+        input rd,wr,
 	input rst,
-  input [7:0]data_in,
+        input [7:0]data_in,
 	output full,empty,
-  output reg [7:0] data_out,
+        output reg [7:0] data_out,
 );
   
   //defining FIFO
