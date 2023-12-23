@@ -1,0 +1,97 @@
+module Fifo_design(
+  
+  input clk,rst,
+  input wr_en,rd_en,
+  input  [8:0]  data_in,
+  output [8:0]  data_out,
+  output fifo_full,fifo_empty,
+  output [8:0] fifo_counter
+);
+  
+  //4 bit of READ/Write pointer 
+  reg [3:0] rd_ptr,wr_ptr;
+  
+  //make sure for in/out
+  reg [3:0] fifo_in, fifo_out;
+  
+  //Determining the size of circular FIFO
+  //DEPTH of FIFO
+  reg [7:0] fifo_mem [63:0];
+  
+  /*DEFINING the STATUS flag
+  1] Full 2]EMPTY */
+  always@(fifo_counter)
+    begin
+      fifo_full =(fifo_counter==63);
+      fifo_empty=(fifo_counter==0);
+    end
+  //This check whenever the counter values change will check for full
+  //and empty condition
+  
+  always@(posedge clk or posedge rst)
+    begin
+      if(rst)
+        fifo_counter <=0;
+      
+      //When we are doing both reading and writing we will not update the value
+      //of FIFO counter
+      else if ((!fifo_full && wr_en) && (!fifo_full && rd_ptr))
+        fifo_counter <= fifo_counter;
+      
+      else if ((!fifo_full && wr_en))
+        fifo_counter <= fifo_counter+1;
+      
+      else if ((!fifo_full && rd_en))
+        fifo_counter<= fifo_counter-1;
+      
+      else
+        fifo_counter <= fifo_counter;
+    end
+  
+  //In this block we will fetch the data from fifo
+  //Doing read operation and getting data from buffer nd putting into systemm
+  always@(posedge clk or posedge clk)
+    begin
+      if (rst)
+        data_out <= 0;
+      else begin
+        if(rd_en && !fifo_empty)
+          data_out <= fifo_memp[rd_ptr];
+        else
+          data_out <= data_out;
+      end
+    end
+  
+  //Performing buffer write operation
+  always @(posedge clk or posedge rst)
+    begin
+      if (!fifo_full && wr_en)
+        fifo_mem[wr_ptr] <= fifo_in;
+      else
+        fifo_mem[wr_ptr] <= fifo_mem[wr_ptr];
+    end
+ 
+  //Handling all the pointers 
+  always@(posedge clk or posedge rst)
+    begin
+      if(rst)
+        begin
+          wr_ptr <=0;
+          rd_ptr <=0;
+        end
+      else
+        begin
+          //This manages write pointer
+          if(!fifo_full && wr_en)
+            wr_ptr <= wr_ptr+1;
+          else 
+            wr_ptr <= wr_ptr;
+          //This manages read pointer
+          if(!fifo_empty && rd_en)
+            rd_ptr <= rd_ptr+1;
+          else 
+            rd_ptr <= rd_ptr;
+        end
+    end
+ 
+endmodule
